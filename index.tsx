@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 
 import ErrorBoundary from './components/ErrorBoundary';
+import { StorageService } from './services/storageService';
+
+// Initialize storage handles
+StorageService.init().catch(console.error);
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

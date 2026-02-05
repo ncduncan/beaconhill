@@ -2,19 +2,21 @@ import { StorageService } from "./storageService";
 
 // URL for MassGIS Parcels (Statewide or partial)
 // Using an example direct link (users might need to update this)
-const MASSGIS_URL = "https://s3.us-east-1.amazonaws.com/download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_M001_BN.zip"; // Barnstable example for testing, or full state if avail
+const MASSGIS_URL = "https://download.massgis.digital.mass.gov/shapefiles/l3parcels/L3_SHP_STATEWIDE.zip"; // Statewide Level 3 Parcels
 
 export const SyncService = {
 
     downloadStatewideParcels: async (onProgress: (pct: number) => void): Promise<void> => {
         // 1. Ensure we have a directory handle
-        if (!await StorageService.isConfigured()) {
-            throw new Error("Storage folder not selected. Please configure storage in settings.");
+        const dirHandle = StorageService.getHandle();
+        if (!dirHandle) {
+            throw new Error("Storage folder not selected or access expired. Please re-select the folder in Settings.");
         }
 
         try {
             // 2. Start Fetch
             const response = await fetch(MASSGIS_URL, { mode: 'cors' });
+            if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText}`);
             if (!response.body) throw new Error("ReadableStream not supported by browser or empty body.");
 
             const contentLength = response.headers.get('Content-Length');
@@ -22,14 +24,6 @@ export const SyncService = {
             let loaded = 0;
 
             // 3. Open File Handle
-            // @ts-ignore
-            const dirHandle = (StorageService as any).cachedDirHandle; // Accessing internal handle (hacky but needed for MVP)
-            // Ideally StorageService exposes a method 'getFileWriter'
-
-            // Allow user to select where to save if not using cached handle specifically for this
-            // But let's assume we save to 'downloads' subfolder in the main DB folder
-            // For now, simpler: Save to 'massgis_parcels.zip' in the root of the selected folder
-
             const fileHandle = await dirHandle.getFileHandle('massgis_parcels.zip', { create: true });
             const writable = await fileHandle.createWritable();
 

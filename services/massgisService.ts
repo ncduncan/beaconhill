@@ -37,11 +37,11 @@ export const MassGISService = {
             f: 'json',
             where: where,
             outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,STYLE,ZONING,LOT_SIZE,OWNER1',
-            returnGeometry: 'false',
+            outSR: '4326', // Return WGS84 coordinates
+            returnGeometry: 'true',
             resultRecordCount: '10'
         });
 
-        // ... truncated fetch logic ...
         return await MassGISService._doQuery(params);
     },
 
@@ -74,7 +74,8 @@ export const MassGISService = {
             f: 'json',
             where: where,
             outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,STYLE,ZONING,LOT_SIZE,OWNER1',
-            returnGeometry: 'false',
+            outSR: '4326', // Return WGS84 coordinates
+            returnGeometry: 'true',
             resultRecordCount: '20'
         });
 
@@ -82,8 +83,9 @@ export const MassGISService = {
     },
 
     // Convert MassGIS Feature to our Application Property Model
-    convertToProperty: (updatedFeature: MassGISFeature): Property => {
-        const attr = updatedFeature.attributes;
+    convertToProperty: (feature: MassGISFeature): Property => {
+        const attr = feature.attributes;
+        const geom = feature.geometry;
 
         // Determine Asset Class
         let assetClass = AssetClass.OTHER;
@@ -101,7 +103,6 @@ export const MassGISService = {
             grossPotentialRent: 0,
             vacancyRate: 5,
             otherIncome: 0,
-
             propertyTax: Math.round(estimatedMarketValue * 0.012),
             insurance: units * 1000,
             utilities: units * 1500,
@@ -112,8 +113,11 @@ export const MassGISService = {
             renovationBudget: 0
         };
 
+        // Use LOC_ID as the unique identifier to prevent duplicates
+        const locId = (attr as any).LOC_ID || `MGEN-${Date.now()}`;
+
         return {
-            id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `prop-${Date.now()}-${Math.random()}`,
+            id: locId,
             address: attr.SITE_ADDR || 'Unknown Address',
             city: attr.CITY || 'Unknown',
             state: 'MA',
@@ -127,7 +131,9 @@ export const MassGISService = {
             useCode: attr.USE_CODE,
             status: PropertyStatus.DISCOVER,
             history: [],
-            description: `Official MassGIS Record. Owner: ${attr.OWNER1 || 'N/A'}. Use: ${attr.USE_CODE}.`,
+            latitude: geom.y,
+            longitude: geom.x,
+            description: `Official MassGIS Record (${locId}). Owner: ${attr.OWNER1 || 'N/A'}.`,
             financials: financials,
             loan: {
                 ltv: 75,

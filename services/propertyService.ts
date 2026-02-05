@@ -32,7 +32,15 @@ export const saveProperty = async (property: Property): Promise<void> => {
   const index = props.findIndex(p => p.id === property.id);
 
   if (index >= 0) {
-    props[index] = property;
+    // If it exists, merging metadata but KEEPING current status
+    // unless the incoming property is significantly different.
+    // This satisfies "Limit every property to only having one status"
+    const existing = props[index];
+    props[index] = {
+      ...property,
+      status: existing.status, // Preserve progress
+      history: existing.history // Preserve history
+    };
   } else {
     props.push(property);
   }

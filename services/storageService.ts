@@ -19,6 +19,38 @@ const STORAGE_KEY_FALLBACK = 'beaconhill_data_fallback';
 
 let cachedDirHandle: FileSystemDirectoryHandle | null = null;
 
+// Tiny IndexedDB wrapper for handle persistence
+const idb = {
+    get: async (key: string) => {
+        return new Promise<any>((resolve) => {
+            const request = indexedDB.open('beaconhill_storage', 1);
+            request.onupgradeneeded = () => request.result.createObjectStore('handles');
+            request.onsuccess = () => {
+                const db = request.result;
+                const tx = db.transaction('handles', 'readonly');
+                const store = tx.objectStore('handles');
+                const getReq = store.get(key);
+                getReq.onsuccess = () => resolve(getReq.result);
+                getReq.onerror = () => resolve(null);
+            };
+            request.onerror = () => resolve(null);
+        });
+    },
+    set: async (key: string, val: any) => {
+        return new Promise<void>((resolve) => {
+            const request = indexedDB.open('beaconhill_storage', 1);
+            request.onupgradeneeded = () => request.result.createObjectStore('handles');
+            request.onsuccess = () => {
+                const db = request.result;
+                const tx = db.transaction('handles', 'readwrite');
+                const store = tx.objectStore('handles');
+                store.put(val, key);
+                tx.oncomplete = () => resolve();
+            };
+        });
+    }
+};
+
 export const StorageService = {
     // Check if we have improved storage configured
     isConfigured: async (): Promise<boolean> => {
@@ -35,11 +67,33 @@ export const StorageService = {
             const handle = await window.showDirectoryPicker();
             cachedDirHandle = handle;
 
+            // Persist the handle in IndexedDB
+            await idb.set(STORAGE_KEY_DIR_HANDLE, handle);
+
             // Try to read existing db or create one
             await StorageService.load();
         } catch (e) {
             console.error("Failed to set directory:", e);
             throw e;
+        }
+    },
+
+    // Try to restore handle from IndexedDB
+    init: async (): Promise<void> => {
+        if (cachedDirHandle) return;
+        try {
+            const handle = await idb.get(STORAGE_KEY_DIR_HANDLE);
+            if (handle) {
+                // Verify we still have permission
+                // Note: Browser requires a user gesture for some permissions, 
+                // but usually queryPermission works.
+                // @ts-ignore
+                if (await handle.queryPermission({ mode: 'readwrite' }) === 'granted') {
+                    cachedDirHandle = handle;
+                }
+            }
+        } catch (e) {
+            console.warn("Could not restore storage handle", e);
         }
     },
 
