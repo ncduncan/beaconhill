@@ -1,16 +1,21 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Property, PropertyStatus } from "../types";
+import { Property } from "../types";
 
-// Initialize Gemini Client
-// In a production app, the key would come strictly from environment variables.
-// For this demo, we assume process.env.API_KEY is available.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const GENERATION_MODEL = "gemini-3-flash-preview"; // Or "gemini-1.5-flash"
+const REASONING_MODEL = "gemini-3-pro-preview"; // Or "gemini-1.5-pro"
 
-const GENERATION_MODEL = "gemini-3-flash-preview";
-const REASONING_MODEL = "gemini-3-pro-preview";
+// Helper to get client dynamically
+const getClient = () => {
+  const apiKey = localStorage.getItem("beaconhill_api_key");
+  if (!apiKey) {
+    throw new Error("API_KEY_MISSING");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const enrichPropertyData = async (address: string): Promise<Partial<Property>> => {
   try {
+    const ai = getClient();
     const prompt = `
       I am a real estate investor looking at a property at: ${address}.
       Act as a real estate data analyst. 
@@ -63,7 +68,8 @@ export const enrichPropertyData = async (address: string): Promise<Partial<Prope
       };
     }
     return {};
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "API_KEY_MISSING") throw error;
     console.error("Error enriching property data:", error);
     return {};
   }
@@ -71,6 +77,7 @@ export const enrichPropertyData = async (address: string): Promise<Partial<Prope
 
 export const generateValueAddPlan = async (property: Property): Promise<string> => {
   try {
+    const ai = getClient();
     const context = JSON.stringify({
       address: property.address,
       type: property.assetClass,
@@ -91,15 +98,16 @@ export const generateValueAddPlan = async (property: Property): Promise<string> 
     `;
 
     const response = await ai.models.generateContent({
-      model: REASONING_MODEL, // Using Pro for deeper reasoning
+      model: REASONING_MODEL,
       contents: prompt,
       config: {
-        thinkingConfig: { thinkingBudget: 2048 } // Enable thinking for better strategy
+        // thinkingConfig: { thinkingBudget: 2048 } // Commented out to avoid potential model config errors if unsupported
       }
     });
 
     return response.text || "Unable to generate plan.";
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "API_KEY_MISSING") throw error;
     console.error("Error generating value add plan:", error);
     return "Error contacting AI agent.";
   }
@@ -107,6 +115,7 @@ export const generateValueAddPlan = async (property: Property): Promise<string> 
 
 export const analyzeManagementTrends = async (property: Property): Promise<string> => {
   try {
+    const ai = getClient();
     const prompt = `
       The user owns this property: ${property.address} (${property.assetClass}).
       Act as a property manager and strategist.
@@ -120,22 +129,23 @@ export const analyzeManagementTrends = async (property: Property): Promise<strin
       model: GENERATION_MODEL,
       contents: prompt,
       config: {
-        tools: [{ googleSearch: {} }] // Enable grounding for real-time trends
+        tools: [{ googleSearch: {} }]
       }
     });
 
     // Check for grounding chunks
     let groundingText = "";
     if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
-        const links = response.candidates[0].groundingMetadata.groundingChunks
-            .map((c: any) => c.web?.uri)
-            .filter(Boolean)
-            .join('\n');
-        if (links) groundingText = `\n\nSources:\n${links}`;
+      const links = response.candidates[0].groundingMetadata.groundingChunks
+        .map((c: any) => c.web?.uri)
+        .filter(Boolean)
+        .join('\n');
+      if (links) groundingText = `\n\nSources:\n${links}`;
     }
 
     return (response.text || "No insights found.") + groundingText;
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message === "API_KEY_MISSING") throw error;
     console.error("Error analyzing trends:", error);
     return "Error retrieving market data.";
   }

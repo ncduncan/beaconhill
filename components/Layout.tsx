@@ -24,6 +24,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <NavItem to="/discover" icon={<Search size={20} />} label="Discover" />
           <NavItem to="/underwrite" icon={<TrendingUp size={20} />} label="Underwrite" />
           <NavItem to="/manage" icon={<Building2 size={20} />} label="Manage" />
+          <NavItem to="/settings" icon={<Settings size={20} />} label="Settings" />
         </nav>
 
         <div className="p-4 border-t border-slate-700">
@@ -53,10 +54,9 @@ const NavItem = ({ to, icon, label }: { to: string; icon: React.ReactNode; label
   <NavLink
     to={to}
     className={({ isActive }) =>
-      `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-        isActive
-          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50'
-          : 'hover:bg-slate-800 hover:text-white'
+      `flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive
+        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50'
+        : 'hover:bg-slate-800 hover:text-white'
       }`
     }
   >
