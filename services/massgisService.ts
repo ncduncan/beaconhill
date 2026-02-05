@@ -16,6 +16,7 @@ interface MassGISFeature {
         YEAR_BUILT: number;
         TOTAL_VAL: number;
         STYLE: string;
+        ZONING: string;
         LOT_SIZE: number;
         OWNER1: string;
     };
@@ -35,24 +36,49 @@ export const MassGISService = {
         const params = new URLSearchParams({
             f: 'json',
             where: where,
-            outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,STYLE,LOT_SIZE,OWNER1',
+            outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,STYLE,ZONING,LOT_SIZE,OWNER1',
             returnGeometry: 'false',
             resultRecordCount: '10'
         });
 
+        // ... truncated fetch logic ...
+        return await MassGISService._doQuery(params);
+    },
+
+    // Internal helper for queries
+    _doQuery: async (params: URLSearchParams): Promise<MassGISFeature[]> => {
         try {
             const response = await fetch(`${MASSGIS_LAYER_URL}/query?${params.toString()}`);
             const data = await response.json();
-
             if (data.error) {
                 console.error("MassGIS Error:", data.error);
                 return [];
             }
             return data.features || [];
         } catch (e) {
-            console.error("Failed to search MassGIS:", e);
+            console.error("Failed to query MassGIS:", e);
             return [];
         }
+    },
+
+    // Advanced Query for Agents
+    queryByCriteria: async (city: string, useCodes: string[]): Promise<MassGISFeature[]> => {
+        let where = `CITY = '${city.toUpperCase()}'`;
+
+        if (useCodes.length > 0) {
+            const codesStr = useCodes.map(c => `'${c}'`).join(',');
+            where += ` AND USE_CODE IN (${codesStr})`;
+        }
+
+        const params = new URLSearchParams({
+            f: 'json',
+            where: where,
+            outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,STYLE,ZONING,LOT_SIZE,OWNER1',
+            returnGeometry: 'false',
+            resultRecordCount: '20'
+        });
+
+        return await MassGISService._doQuery(params);
     },
 
     // Convert MassGIS Feature to our Application Property Model
@@ -96,9 +122,12 @@ export const MassGISService = {
             sqft: attr.BLD_AREA || attr.RES_AREA || 0,
             units: units,
             yearBuilt: attr.YEAR_BUILT || 1900,
+            zoning: attr.ZONING,
+            style: attr.STYLE,
+            useCode: attr.USE_CODE,
             status: PropertyStatus.DISCOVER,
             history: [],
-            description: `Official MassGIS Record. Style: ${attr.STYLE || 'N/A'}. Owner: ${attr.OWNER1 || 'N/A'}. Use Code: ${attr.USE_CODE}.`,
+            description: `Official MassGIS Record. Owner: ${attr.OWNER1 || 'N/A'}. Use: ${attr.USE_CODE}.`,
             financials: financials,
             loan: {
                 ltv: 75,

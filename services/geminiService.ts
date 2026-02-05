@@ -189,3 +189,21 @@ export const analyzeManagementTrends = async (property: Property): Promise<strin
     return "Error retrieving market data.";
   }
 };
+
+export const GeminiService = {
+  generateText: async (prompt: string): Promise<string> => {
+    try {
+      const ai = getClient();
+      const apiCall = () => ai.models.generateContent({
+        model: GENERATION_MODEL,
+        contents: prompt,
+      });
+      const response = await retryWithBackoff(apiCall);
+      return response.text || "";
+    } catch (error: any) {
+      if (error.message === "API_KEY_MISSING") throw error;
+      console.error("Gemini Generic Error:", error);
+      return "";
+    }
+  }
+};

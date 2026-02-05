@@ -65,6 +65,9 @@ export interface Property {
   units: number;
   yearBuilt: number;
   imageUrl?: string;
+  zoning?: string;
+  style?: string;
+  useCode?: string;
 
   status: PropertyStatus;
   history: StatusHistory[]; // Track flow changes
