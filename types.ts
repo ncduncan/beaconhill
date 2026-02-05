@@ -1,7 +1,9 @@
 export enum PropertyStatus {
-  DISCOVERY = 'DISCOVERY',
-  DILIGENCE = 'DILIGENCE',
-  OWNED = 'OWNED',
+  DISCOVER = 'DISCOVER',
+  UNDERWRITE = 'UNDERWRITE', // Formerly DILIGENCE
+  MANAGE = 'MANAGE',         // Formerly OWNED
+  PASSED = 'PASSED',
+  DISPOSED = 'DISPOSED'
 }
 
 export enum AssetClass {
@@ -10,15 +12,33 @@ export enum AssetClass {
   RETAIL = 'Retail',
   INDUSTRIAL = 'Industrial',
   MIXED_USE = 'Mixed Use',
+  OTHER = 'Other',
 }
 
-export interface Financials {
-  purchasePrice: number;
+export interface DetailedFinancials {
+  // Income
   grossPotentialRent: number;
-  vacancyRate: number; // percentage 0-100
-  operatingExpenses: number; // annual
-  propertyTax: number; // annual
-  capitalReserves: number; // annual
+  otherIncome: number;
+  vacancyRate: number; // %
+
+  // Expenses
+  propertyTax: number;
+  insurance: number;
+  utilities: number;
+  repairsMaintenance: number;
+  managementFee: number; // % of EGI
+  capitalReserves: number;
+
+  // Acquisition
+  purchasePrice: number;
+  closingCosts: number;
+  renovationBudget: number;
+}
+
+export interface LoanAssumptions {
+  ltv: number; // % Loan to Value
+  interestRate: number; // %
+  amortizationYears: number;
 }
 
 export interface UnderwritingAssumptions {
@@ -26,6 +46,12 @@ export interface UnderwritingAssumptions {
   expenseGrowth: number; // %
   exitCapRate: number; // %
   holdPeriodYears: number;
+}
+
+export interface StatusHistory {
+  status: PropertyStatus;
+  date: string;
+  note?: string;
 }
 
 export interface Property {
@@ -39,15 +65,23 @@ export interface Property {
   units: number;
   yearBuilt: number;
   imageUrl?: string;
+
   status: PropertyStatus;
+  history: StatusHistory[]; // Track flow changes
+
   description: string;
-  
+
+  // Lat/Long for Map
+  latitude?: number;
+  longitude?: number;
+
   // AI Discovery Scoring
   aiScore?: number; // 0-100
   aiReasoning?: string;
 
   // Financials
-  financials: Financials;
+  financials: DetailedFinancials;
+  loan: LoanAssumptions;
   assumptions: UnderwritingAssumptions;
 
   // AI Insights
@@ -61,4 +95,5 @@ export interface CashFlowPoint {
   year: number;
   noi: number;
   yield: number;
+  cashFlow: number;
 }

@@ -1,105 +1,76 @@
-import { Property, PropertyStatus, AssetClass } from "../types";
+import { Property, PropertyStatus, StatusHistory } from "../types";
+import { StorageService } from "./storageService";
 
-// STORAGE_KEY for localStorage
-const STORAGE_KEY = 'beaconhill_cre_properties';
-
-// Initial Mock Data
-const INITIAL_DATA: Property[] = [
-  {
-    id: '1',
-    address: '123 Newbury St',
-    city: 'Boston',
-    state: 'MA',
-    zip: '02116',
-    assetClass: AssetClass.RETAIL,
-    sqft: 4500,
-    units: 3,
-    yearBuilt: 1910,
-    status: PropertyStatus.DILIGENCE,
-    description: 'Prime retail frontage with residential units above. High foot traffic area.',
-    imageUrl: 'https://picsum.photos/800/600?random=1',
-    financials: {
-      purchasePrice: 4500000,
-      grossPotentialRent: 380000,
-      vacancyRate: 5,
-      operatingExpenses: 95000,
-      propertyTax: 48000,
-      capitalReserves: 5000,
-    },
-    assumptions: {
-      marketRentGrowth: 3.0,
-      expenseGrowth: 2.5,
-      exitCapRate: 5.5,
-      holdPeriodYears: 10,
-    }
-  },
-  {
-    id: '2',
-    address: '450 Harrison Ave',
-    city: 'Boston',
-    state: 'MA',
-    zip: '02118',
-    assetClass: AssetClass.OFFICE,
-    sqft: 12000,
-    units: 8,
-    yearBuilt: 1925,
-    status: PropertyStatus.DISCOVERY,
-    description: 'Converted warehouse space in SoWa district. Potential for creative office or life science conversion.',
-    imageUrl: 'https://picsum.photos/800/600?random=2',
-    aiScore: 88,
-    aiReasoning: 'High appreciation potential due to life science expansion in adjacent neighborhoods.',
-    financials: {
-      purchasePrice: 8500000,
-      grossPotentialRent: 750000,
-      vacancyRate: 10,
-      operatingExpenses: 180000,
-      propertyTax: 92000,
-      capitalReserves: 12000,
-    },
-    assumptions: {
-      marketRentGrowth: 4.0,
-      expenseGrowth: 2.0,
-      exitCapRate: 5.0,
-      holdPeriodYears: 7,
-    }
-  }
-];
-
-// Helper to simulate DB delay
+// Helper to simulate network delay for UI realism
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const getProperties = async (): Promise<Property[]> => {
-  await delay(300); // Simulate network
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DATA));
-    return INITIAL_DATA;
+export const getProperties = async (includeHidden = false): Promise<Property[]> => {
+  // Ensure storage is ready (or using fallback)
+  let props = await StorageService.load();
+
+  if (includeHidden) {
+    return props;
   }
-  return JSON.parse(stored);
+
+
+  // Filter out 'archived' items unless requested
+  // PASSED and DISPOSED are considered "hidden" from the main workflow flow
+  return props.filter(p =>
+    p.status !== PropertyStatus.PASSED &&
+    p.status !== PropertyStatus.DISPOSED
+  );
 };
 
 export const getPropertyById = async (id: string): Promise<Property | undefined> => {
-  const props = await getProperties();
+  const props = await StorageService.load(); // Load all, including hidden
   return props.find(p => p.id === id);
 };
 
 export const saveProperty = async (property: Property): Promise<void> => {
-  await delay(300);
-  const props = await getProperties();
+  await delay(200);
+  const props = await StorageService.load();
   const index = props.findIndex(p => p.id === property.id);
-  
+
   if (index >= 0) {
     props[index] = property;
   } else {
     props.push(property);
   }
-  
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(props));
+
+  await StorageService.save(props);
 };
 
-export const deleteProperty = async (id: string): Promise<void> => {
+export const updateStatus = async (id: string, newStatus: PropertyStatus, note?: string): Promise<void> => {
+  const props = await StorageService.load();
+  const property = props.find(p => p.id === id);
+
+  if (property) {
+    // Record history
+    const historyItem: StatusHistory = {
+      status: property.status,
+      date: new Date().toISOString(),
+      note: note || `Transitioned to ${newStatus}`
+    };
+
+    // Initialize history if missing
+    if (!property.history) property.history = [];
+    property.history.push(historyItem);
+
+    // Update status
+    property.status = newStatus;
+
+    await StorageService.save(props);
+  }
+};
+
+// "Soft Delete" by moving to DISPOSED or PASSED (already handled by updateStatus), 
+// but this strictly removes from DB if needed (e.g. clean up).
+// User request: "All data should be retained, but may be hidden". 
+// So 'delete' actually just means status change usually. 
+// We will keep this for hard cleanups if necessary.
+export const hardDeleteProperty = async (id: string): Promise<void> => {
   await delay(200);
-  const props = await getProperties();
+  const props = await StorageService.load();
   const filtered = props.filter(p => p.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+  await StorageService.save(filtered);
 }

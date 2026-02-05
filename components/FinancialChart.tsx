@@ -6,12 +6,11 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   LineChart,
   Line
 } from 'recharts';
-import { Property } from '../types';
+import { Property, DetailedFinancials } from '../types';
 
 interface FinancialChartProps {
   property: Property;
@@ -24,13 +23,30 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ property }) => {
     const f = property.financials;
     const a = property.assumptions;
 
-    let currentGrossRent = f.grossPotentialRent;
-    let currentOpex = f.operatingExpenses + f.propertyTax + f.capitalReserves;
-    
+    let currentGrossRent = f.grossPotentialRent + (f.otherIncome || 0);
+
+    // Calculate initial annual opex sum
+    let currentOpex =
+      f.propertyTax +
+      f.insurance +
+      f.utilities +
+      f.repairsMaintenance +
+      f.capitalReserves;
+
+    // Add management fee which is usually a % of Effective Gross Income, 
+    // but for simplicity here we might base it on GPR initially or recalculate yearly.
+    // Let's model it as a flat growable expense for now to avoid circular calc complexity in this chart view,
+    // or better: recalculate it each year based on EGI.
+
     for (let year = 1; year <= a.holdPeriodYears; year++) {
       const vacancyLoss = currentGrossRent * (f.vacancyRate / 100);
-      const noi = currentGrossRent - vacancyLoss - currentOpex;
-      const unleveredYield = (noi / f.purchasePrice) * 100;
+      const effectiveGrossIncome = currentGrossRent - vacancyLoss;
+
+      const mgmtFeeAmount = effectiveGrossIncome * (f.managementFee / 100);
+      const totalOpex = currentOpex + mgmtFeeAmount;
+
+      const noi = effectiveGrossIncome - totalOpex;
+      const unleveredYield = (noi / (f.purchasePrice + f.renovationBudget + f.closingCosts)) * 100;
 
       points.push({
         year: `Year ${year}`,
@@ -54,15 +70,15 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ property }) => {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-              <YAxis unit="%" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-              <Tooltip 
+              <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+              <YAxis unit="%" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+              <Tooltip
                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               />
-              <Line 
-                type="monotone" 
-                dataKey="yield" 
-                stroke="#4f46e5" 
+              <Line
+                type="monotone"
+                dataKey="yield"
+                stroke="#4f46e5"
                 strokeWidth={3}
                 dot={{ r: 4, fill: '#4f46e5' }}
                 activeDot={{ r: 6 }}
@@ -79,16 +95,16 @@ const FinancialChart: React.FC<FinancialChartProps> = ({ property }) => {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748b'}} />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{fontSize: 12, fill: '#64748b'}}
-                tickFormatter={(value) => `$${value/1000}k`} 
+              <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 12, fill: '#64748b' }}
+                tickFormatter={(value) => `$${value / 1000}k`}
               />
-              <Tooltip 
-                 formatter={(value) => [`$${value.toLocaleString()}`, "NOI"]}
-                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+              <Tooltip
+                formatter={(value: number) => [`$${value.toLocaleString()}`, "NOI"]}
+                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
               />
               <Bar dataKey="noi" fill="#10b981" radius={[4, 4, 0, 0]} name="NOI" />
             </BarChart>

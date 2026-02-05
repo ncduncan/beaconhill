@@ -1,8 +1,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Property } from "../types";
+import { Property, DetailedFinancials } from "../types";
 
-const GENERATION_MODEL = "gemini-3-flash-preview"; // Or "gemini-1.5-flash"
-const REASONING_MODEL = "gemini-3-pro-preview"; // Or "gemini-1.5-pro"
+const GENERATION_MODEL = "gemini-2.0-flash-exp";
+const REASONING_MODEL = "gemini-2.0-flash-thinking-exp";
 
 // Helper to get client dynamically
 const getClient = () => {
@@ -11,6 +11,24 @@ const getClient = () => {
     throw new Error("API_KEY_MISSING");
   }
   return new GoogleGenAI({ apiKey });
+};
+
+// Retry logic for 429 Rate Limits
+const retryWithBackoff = async <T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  delay = 1000
+): Promise<T> => {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (retries > 0 && (error.status === 429 || error.message?.includes('429'))) {
+      console.warn(`Rate limit hit, retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
 };
 
 export const enrichPropertyData = async (address: string): Promise<Partial<Property>> => {
@@ -23,7 +41,7 @@ export const enrichPropertyData = async (address: string): Promise<Partial<Prope
       Return JSON only.
     `;
 
-    const response = await ai.models.generateContent({
+    const apiCall = () => ai.models.generateContent({
       model: GENERATION_MODEL,
       contents: prompt,
       config: {
@@ -45,8 +63,35 @@ export const enrichPropertyData = async (address: string): Promise<Partial<Prope
       },
     });
 
+    const response = await retryWithBackoff(apiCall);
+
     if (response.text) {
       const data = JSON.parse(response.text);
+
+      // Default Assumptions
+      const estimatedValue = data.estimatedValue || 1000000;
+      const grossRent = data.estimatedMarketRent || 100000; // Annual
+
+      // Construct DetailedFinancials
+      const financials: DetailedFinancials = {
+        grossPotentialRent: grossRent,
+        otherIncome: grossRent * 0.03, // 3% misc income
+        vacancyRate: 5,
+
+        // Expenses
+        propertyTax: estimatedValue * 0.012, // ~1.2% MA Tax
+        insurance: (data.units || 3) * 1200, // Est per unit
+        utilities: (data.units || 3) * 1500, // Est per unit
+        repairsMaintenance: (data.units || 3) * 800,
+        managementFee: 5, // 5%
+        capitalReserves: (data.units || 3) * 300,
+
+        // Acquisition
+        purchasePrice: estimatedValue,
+        closingCosts: estimatedValue * 0.02,
+        renovationBudget: (data.units || 3) * 10000,
+      };
+
       return {
         address: address,
         city: data.city,
@@ -56,22 +101,14 @@ export const enrichPropertyData = async (address: string): Promise<Partial<Prope
         units: data.units || 1,
         yearBuilt: data.yearBuilt,
         description: data.description,
-        // Map estimated values to our financial structure partially
-        financials: {
-          purchasePrice: data.estimatedValue || 1000000,
-          grossPotentialRent: data.estimatedMarketRent || 100000,
-          vacancyRate: 5,
-          operatingExpenses: (data.estimatedMarketRent || 100000) * 0.35, // Rule of thumb
-          propertyTax: (data.estimatedValue || 1000000) * 0.012, // MA approx rate
-          capitalReserves: (data.sqft || 5000) * 0.50, // $0.50/sqft reserve
-        } as any // Type casting for partial return
+        financials: financials
       };
     }
     return {};
   } catch (error: any) {
     if (error.message === "API_KEY_MISSING") throw error;
     console.error("Error enriching property data:", error);
-    return {};
+    return {}; // Graceful fail
   }
 };
 
@@ -97,19 +134,19 @@ export const generateValueAddPlan = async (property: Property): Promise<string> 
       Format the output as Markdown.
     `;
 
-    const response = await ai.models.generateContent({
+    const apiCall = () => ai.models.generateContent({
       model: REASONING_MODEL,
       contents: prompt,
-      config: {
-        // thinkingConfig: { thinkingBudget: 2048 } // Commented out to avoid potential model config errors if unsupported
-      }
+      config: {}
     });
+
+    const response = await retryWithBackoff(apiCall);
 
     return response.text || "Unable to generate plan.";
   } catch (error: any) {
     if (error.message === "API_KEY_MISSING") throw error;
     console.error("Error generating value add plan:", error);
-    return "Error contacting AI agent.";
+    return "Error contacting AI agent. Please try again later.";
   }
 };
 
@@ -125,13 +162,15 @@ export const analyzeManagementTrends = async (property: Property): Promise<strin
       3. One operational tip to reduce expense ratio.
     `;
 
-    const response = await ai.models.generateContent({
+    const apiCall = () => ai.models.generateContent({
       model: GENERATION_MODEL,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }]
       }
     });
+
+    const response = await retryWithBackoff(apiCall);
 
     // Check for grounding chunks
     let groundingText = "";
