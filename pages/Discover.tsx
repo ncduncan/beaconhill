@@ -3,6 +3,7 @@ import { Search, Plus, MapPin, Building2, TrendingUp, AlertCircle, Loader2, X, S
 import { Property, PropertyStatus } from '../types';
 import { getProperties, updateStatus, saveProperty } from '../services/propertyService';
 import { MassGISService } from '../services/massgisService';
+import { StreetViewService } from '../services/streetViewService';
 import { getUseCodeDescription, getStyleDescription, getZoningDescription, getUnitCountSummary } from '../constants/massgisMappings';
 import { useNavigate } from 'react-router-dom';
 import { ResearchAgent } from '../components/ResearchAgent';
@@ -44,6 +45,13 @@ const Discover = () => {
     const handleAddProperty = async (feature: any) => {
         try {
             const newProp = MassGISService.convertToProperty(feature);
+
+            // Proactively try to fetch a street view image
+            const imageUrl = await StreetViewService.getFreeStreetViewImage(newProp.latitude || 0, newProp.longitude || 0);
+            if (imageUrl) {
+                newProp.streetViewImageUrl = imageUrl;
+            }
+
             await saveProperty(newProp);
             setSearchResults([]);
             setSearchQuery('');
@@ -165,7 +173,9 @@ const Discover = () => {
                             className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer overflow-hidden group flex flex-col"
                         >
                             <div className="h-40 bg-slate-200 relative overflow-hidden shrink-0">
-                                {property.imageUrl ? (
+                                {property.streetViewImageUrl ? (
+                                    <img src={property.streetViewImageUrl} alt={property.address} className="w-full h-full object-cover" />
+                                ) : property.imageUrl ? (
                                     <img src={property.imageUrl} alt={property.address} className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300">
@@ -173,7 +183,7 @@ const Discover = () => {
                                     </div>
                                 )}
                                 <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-2 py-1 rounded-md text-xs font-bold shadow-sm">
-                                    {property.assetClass}
+                                    {property.buildingType || property.assetClass}
                                 </div>
                             </div>
 
@@ -222,20 +232,34 @@ const Discover = () => {
             {selectedProperty && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95">
-                        <div className="h-48 bg-slate-200 relative">
-                            <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-                                <Building2 size={64} opacity={0.5} />
-                            </div>
+                        <div className="h-64 bg-slate-200 relative overflow-hidden">
+                            {selectedProperty.streetViewImageUrl ? (
+                                <img src={selectedProperty.streetViewImageUrl} alt={selectedProperty.address} className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center text-slate-400">
+                                    <Building2 size={64} opacity={0.5} />
+                                </div>
+                            )}
                             <button
                                 onClick={() => setSelectedProperty(null)}
-                                className="absolute top-4 right-4 p-2 bg-white/50 hover:bg-white rounded-full transition-colors"
+                                className="absolute top-4 right-4 p-2 bg-white/70 hover:bg-white rounded-full transition-colors shadow-sm z-10"
                             >
                                 <X size={20} />
                             </button>
-                            <div className="absolute bottom-4 left-4">
-                                <h2 className="text-2xl font-bold text-slate-900 bg-white/90 px-3 py-1 rounded-lg backdrop-blur">{selectedProperty.address}</h2>
-                                <p className="text-slate-800 font-medium bg-white/90 px-3 py-1 rounded-lg backdrop-blur mt-1 inline-block">{selectedProperty.city}, {selectedProperty.state}</p>
+                            <div className="absolute bottom-4 left-4 z-10">
+                                <h2 className="text-2xl font-bold text-slate-900 bg-white/90 px-3 py-1 rounded-lg backdrop-blur shadow-sm">{selectedProperty.address}</h2>
+                                <p className="text-slate-800 font-medium bg-white/90 px-3 py-1 rounded-lg backdrop-blur mt-1 inline-block shadow-sm">{selectedProperty.city}, {selectedProperty.state}</p>
                             </div>
+
+                            {/* External Street View Link */}
+                            <a
+                                href={StreetViewService.getGoogleStreetViewLink(selectedProperty.latitude || 0, selectedProperty.longitude || 0)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="absolute bottom-4 right-4 bg-indigo-600 text-white p-2 rounded-lg shadow-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-xs font-bold z-10"
+                            >
+                                <MapPin size={14} /> Street View
+                            </a>
                         </div>
 
                         <div className="p-6">
@@ -269,6 +293,14 @@ const Discover = () => {
                                             <dt className="text-slate-500">Asset Class</dt>
                                             <dd className="font-semibold text-slate-900">{selectedProperty.assetClass}</dd>
                                         </div>
+                                        <div className="flex justify-between">
+                                            <dt className="text-slate-500">Type</dt>
+                                            <dd className="font-semibold text-slate-900">{selectedProperty.buildingType}</dd>
+                                        </div>
+                                        <div className="flex justify-between pt-2 border-t border-slate-100 mt-2">
+                                            <dt className="text-slate-500">Owner</dt>
+                                            <dd className="font-semibold text-slate-700 text-right leading-tight max-w-[150px]">{selectedProperty.description.split('Owner: ')[1] || 'N/A'}</dd>
+                                        </div>
                                     </dl>
                                 </div>
                                 <div>
@@ -282,18 +314,25 @@ const Discover = () => {
                                             <dt className="text-slate-500">Est. Taxes</dt>
                                             <dd className="font-semibold text-slate-900">${selectedProperty.financials.propertyTax.toLocaleString()}/yr</dd>
                                         </div>
+                                        {selectedProperty.lastSalePrice && (
+                                            <div className="flex justify-between pt-2 border-t border-slate-100 mt-2">
+                                                <dt className="text-slate-500">Last Sale</dt>
+                                                <dd className="font-semibold text-slate-900">
+                                                    ${selectedProperty.lastSalePrice.toLocaleString()}
+                                                    <span className="text-[10px] text-slate-400 ml-1 font-normal">
+                                                        ({selectedProperty.lastSaleDate || 'N/A'})
+                                                    </span>
+                                                </dd>
+                                            </div>
+                                        )}
                                     </dl>
                                 </div>
                             </div>
 
-                            <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                                <h3 className="font-semibold text-slate-900 mb-2 flex items-center gap-2">
-                                    <AlertCircle size={16} className="text-indigo-600" />
-                                    Data Source: MassGIS
-                                </h3>
-                                <p className="text-sm text-slate-600">
-                                    {selectedProperty.description}
-                                </p>
+                            <div className="flex flex-col gap-1">
+                                <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                    <AlertCircle size={10} /> MassGIS Record ID: {selectedProperty.id}
+                                </span>
                             </div>
 
                             <div className="flex gap-3 mt-6">

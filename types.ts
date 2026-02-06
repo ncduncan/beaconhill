@@ -69,6 +69,11 @@ export interface Property {
   style?: string;
   useCode?: string;
 
+  lastSaleDate?: string;
+  lastSalePrice?: number;
+  buildingType?: string;
+  streetViewImageUrl?: string;
+
   status: PropertyStatus;
   history: StatusHistory[]; // Track flow changes
 

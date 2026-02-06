@@ -1,4 +1,5 @@
 import { Property, PropertyStatus, AssetClass, DetailedFinancials } from "../types";
+import { getUseCodeDescription } from "../constants/massgisMappings";
 
 // MassGIS Level 3 Parcel Feature Server
 // Source: https://services1.arcgis.com/hGdibHYSPO59RG1h/arcgis/rest/services/L3_TAXPAR_POLY_ASSESS_gdb/FeatureServer/0
@@ -89,14 +90,46 @@ export const MassGISService = {
 
         // Determine Asset Class
         let assetClass = AssetClass.OTHER;
-        const useCode = parseInt(attr.USE_CODE) || 0;
+        const useCodeStr = attr.USE_CODE || '';
+        const useCode = parseInt(useCodeStr) || 0;
 
-        if (useCode >= 101 && useCode <= 109) assetClass = AssetClass.MULTIFAMILY;
-        if (useCode >= 300 && useCode <= 399) assetClass = AssetClass.RETAIL;
-        if (useCode >= 400 && useCode <= 499) assetClass = AssetClass.INDUSTRIAL;
+        // 1xx is Residential
+        if (useCode >= 101 && useCode <= 199) {
+            assetClass = AssetClass.MULTIFAMILY;
+        }
+        // 3xx is Commercial (Retail/Office/etc)
+        else if (useCode >= 300 && useCode <= 399) {
+            assetClass = AssetClass.RETAIL;
+        }
+        // 4xx is Industrial
+        else if (useCode >= 400 && useCode <= 499) {
+            assetClass = AssetClass.INDUSTRIAL;
+        }
+
+        // Special Mixed Use Detection
+        if (useCodeStr.startsWith('0')) {
+            assetClass = AssetClass.MIXED_USE;
+        }
 
         const estimatedMarketValue = (attr.TOTAL_VAL || 0);
-        const units = attr.UNITS || 1;
+        let units = attr.UNITS || 0;
+
+        // Inferred units from style if UNITS is missing or 1 but style suggests more
+        if (units <= 1 && attr.STYLE) {
+            const style = attr.STYLE.toUpperCase();
+            if (style.includes('4UNIT')) units = 4;
+            else if (style.includes('DX') || style.includes('DUPLEX')) units = 2;
+            else if (style.includes('TK') || style.includes('TRIPLE')) units = 3;
+            else if (style.includes('31-99')) units = 50; // Approximated average for "31-99"
+            else if (style.includes('UNIT') || style.includes('APT')) {
+                // Try to extract a number if present
+                const match = style.match(/(\d+)\s*UNIT/);
+                if (match) units = parseInt(match[1]);
+            }
+        }
+
+        // Final fallback
+        if (units === 0) units = 1;
 
         const financials: DetailedFinancials = {
             purchasePrice: estimatedMarketValue,
@@ -123,12 +156,15 @@ export const MassGISService = {
             state: 'MA',
             zip: attr.ZIP || '',
             assetClass: assetClass,
+            buildingType: getUseCodeDescription(useCodeStr),
             sqft: attr.BLD_AREA || attr.RES_AREA || 0,
             units: units,
             yearBuilt: attr.YEAR_BUILT || 1900,
             zoning: attr.ZONING,
             style: attr.STYLE,
             useCode: attr.USE_CODE,
+            lastSaleDate: (attr as any).LS_DATE || undefined,
+            lastSalePrice: (attr as any).LS_PRICE || undefined,
             status: PropertyStatus.DISCOVER,
             history: [],
             latitude: geom.y,

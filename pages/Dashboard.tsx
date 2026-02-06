@@ -37,7 +37,16 @@ const Dashboard = () => {
     const manageCount = properties.filter(p => p.status === PropertyStatus.MANAGE).length;
 
     // Default center (Boston)
-    const center = { lat: 42.3601, lng: -71.0589 };
+    const [center, setCenter] = useState<[number, number]>([42.3601, -71.0589]);
+
+    useEffect(() => {
+        if (properties.length > 0) {
+            const firstWithCoords = properties.find(p => p.latitude && p.longitude);
+            if (firstWithCoords) {
+                setCenter([firstWithCoords.latitude!, firstWithCoords.longitude!]);
+            }
+        }
+    }, [properties]);
 
     return (
         <div className="flex h-full gap-4">
@@ -93,14 +102,14 @@ const Dashboard = () => {
 
             {/* Map Area */}
             <div className="flex-1 bg-slate-100 rounded-xl border border-slate-200 overflow-hidden relative shadow-inner">
-                <MapContainer center={[center.lat, center.lng]} zoom={13} style={{ height: '100%', width: '100%' }}>
+                <MapContainer key={center.join(',')} center={center} zoom={13} style={{ height: '100%', width: '100%' }}>
                     <TileLayer
                         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     />
                     {properties.map(p => {
-                        // If no lat/long, skip (or use a default)
-                        if (!p.latitude || !p.longitude) return null;
+                        // More robust check for coordinates (0 is valid for some locations, though not MA)
+                        if (p.latitude === undefined || p.longitude === undefined) return null;
 
                         return (
                             <Marker
@@ -108,11 +117,21 @@ const Dashboard = () => {
                                 position={[p.latitude, p.longitude]}
                                 icon={Icons[p.status] || Icons[PropertyStatus.PASSED]}
                             >
-                                <Popup>
-                                    <div className="p-1">
-                                        <h3 className="font-bold text-sm mb-1">{p.address}</h3>
-                                        <div className="text-xs text-slate-500 mb-2">{p.city}, MA</div>
-                                        <Link to={`/underwrite?id=${p.id}`} className="block text-center text-xs bg-indigo-600 text-white py-1 px-2 rounded">
+                                <Popup className="custom-popup">
+                                    <div className="p-1 min-w-[150px]">
+                                        <h3 className="font-bold text-sm mb-0.5">{p.address}</h3>
+                                        <div className="text-[10px] text-slate-500 mb-2">{p.city}, MA • {p.assetClass}</div>
+                                        <div className="grid grid-cols-2 gap-2 mb-3 text-[10px]">
+                                            <div className="bg-slate-50 p-1 rounded">
+                                                <div className="text-slate-400">UNITS</div>
+                                                <div className="font-bold">{p.units}</div>
+                                            </div>
+                                            <div className="bg-slate-50 p-1 rounded">
+                                                <div className="text-slate-400">VALUE</div>
+                                                <div className="font-bold">${(p.financials.purchasePrice / 1000).toFixed(0)}k</div>
+                                            </div>
+                                        </div>
+                                        <Link to={`/underwrite?id=${p.id}`} className="block text-center text-xs bg-indigo-600 text-white py-1.5 px-2 rounded-lg font-bold hover:bg-indigo-700 transition-colors">
                                             View Details
                                         </Link>
                                     </div>

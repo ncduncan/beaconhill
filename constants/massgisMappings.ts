@@ -12,7 +12,11 @@ export const USE_CODE_MAPPING: Record<string, string> = {
     '109': 'Multiple Houses on One Parcel',
     '111': '4-8 Unit Apartment Building',
     '112': '8+ Unit Apartment Building',
+    '113': 'Apartment/Residential Complex',
     '121': 'Rooming/Boarding House',
+    '122': 'Fraternity/Sorority House',
+    '123': 'Residence Halls/Dormitories',
+    '125': 'Other Congregate Housing',
     '130': 'Developable Residential Land',
     '131': 'Potentially Developable Res Land',
     '132': 'Undev. Residential Land',
@@ -81,9 +85,9 @@ export const getStyleDescription = (style: string): string => {
 };
 
 export const getZoningDescription = (code: string): string => {
-    if (!code) return 'Mixed/Unspecified';
+    if (!code || code === 'nan' || code === 'N/A') return 'Mixed/Unspecified';
     // Most towns use RA, RB, RC for Res A, B, C or LI for Light Industrial
-    return `Zoning: ${code}`;
+    return code;
 };
 
 // Returns a human readable "X Units" string or inferred from use code
