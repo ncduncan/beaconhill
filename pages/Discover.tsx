@@ -236,9 +236,14 @@ const Discover = () => {
                             {selectedProperty.streetViewImageUrl ? (
                                 <img src={selectedProperty.streetViewImageUrl} alt={selectedProperty.address} className="w-full h-full object-cover" />
                             ) : (
-                                <div className="absolute inset-0 flex items-center justify-center text-slate-400">
-                                    <Building2 size={64} opacity={0.5} />
-                                </div>
+                                <iframe
+                                    width="100%"
+                                    height="100%"
+                                    style={{ border: 0 }}
+                                    loading="lazy"
+                                    allowFullScreen
+                                    src={`https://www.google.com/maps?q=${selectedProperty.latitude},${selectedProperty.longitude}&output=embed&layer=c`}
+                                />
                             )}
                             <button
                                 onClick={() => setSelectedProperty(null)}
@@ -251,14 +256,14 @@ const Discover = () => {
                                 <p className="text-slate-800 font-medium bg-white/90 px-3 py-1 rounded-lg backdrop-blur mt-1 inline-block shadow-sm">{selectedProperty.city}, {selectedProperty.state}</p>
                             </div>
 
-                            {/* External Street View Link */}
+                            {/* External Street View Link - Always available for interactive full view */}
                             <a
                                 href={StreetViewService.getGoogleStreetViewLink(selectedProperty.latitude || 0, selectedProperty.longitude || 0)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="absolute bottom-4 right-4 bg-indigo-600 text-white p-2 rounded-lg shadow-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 text-xs font-bold z-10"
                             >
-                                <MapPin size={14} /> Street View
+                                <MapPin size={14} /> View Interactive
                             </a>
                         </div>
 
@@ -273,7 +278,7 @@ const Discover = () => {
                                         </div>
                                         <div className="flex justify-between">
                                             <dt className="text-slate-500">Building Size</dt>
-                                            <dd className="font-semibold text-slate-900">{selectedProperty.sqft.toLocaleString()} sqft</dd>
+                                            <dd className="font-semibold text-slate-900">{selectedProperty.sqft > 0 ? `${selectedProperty.sqft.toLocaleString()} sqft` : 'N/A'}</dd>
                                         </div>
                                         <div className="flex justify-between">
                                             <dt className="text-slate-500">Units</dt>

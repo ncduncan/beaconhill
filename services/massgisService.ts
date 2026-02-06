@@ -40,6 +40,7 @@ export const MassGISService = {
             outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,BLDG_VAL,LAND_VAL,STYLE,ZONING,LOT_SIZE,OWNER1,NUM_ROOMS,STORIES,LS_DATE,LS_PRICE,LOC_ID',
             outSR: '4326', // Return WGS84 coordinates
             returnGeometry: 'true',
+            returnCentroid: 'true', // Crucial for polygon layers to get a marker point
             resultRecordCount: '10'
         });
 
@@ -77,6 +78,7 @@ export const MassGISService = {
             outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,BLDG_VAL,LAND_VAL,STYLE,ZONING,LOT_SIZE,OWNER1,NUM_ROOMS,STORIES,LS_DATE,LS_PRICE,LOC_ID',
             outSR: '4326', // Return WGS84 coordinates
             returnGeometry: 'true',
+            returnCentroid: 'true',
             resultRecordCount: '20'
         });
 
@@ -84,9 +86,10 @@ export const MassGISService = {
     },
 
     // Convert MassGIS Feature to our Application Property Model
-    convertToProperty: (feature: MassGISFeature): Property => {
+    convertToProperty: (feature: any): Property => {
         const attr = feature.attributes;
         const geom = feature.geometry;
+        const centroid = feature.centroid; // Returned when returnCentroid=true
 
         // Determine Asset Class
         let assetClass = AssetClass.OTHER;
@@ -120,7 +123,7 @@ export const MassGISService = {
             if (style.includes('4UNIT')) units = 4;
             else if (style.includes('DX') || style.includes('DUPLEX')) units = 2;
             else if (style.includes('TK') || style.includes('TRIPLE')) units = 3;
-            else if (style.includes('31-99')) units = 50; // Approximated average for "31-99"
+            else if (style.includes('31-99')) units = 65; // Improved average for "31-99"
             else if (style.includes('UNIT') || style.includes('APT')) {
                 // Try to extract a number if present
                 const match = style.match(/(\d+)\s*UNIT/);
@@ -130,6 +133,15 @@ export const MassGISService = {
 
         // Final fallback
         if (units === 0) units = 1;
+
+        // Format Sale Date (MassGIS uses YYYYMMDD string)
+        let formattedSaleDate = attr.LS_DATE;
+        if (formattedSaleDate && formattedSaleDate.length === 8) {
+            const y = formattedSaleDate.substring(0, 4);
+            const m = formattedSaleDate.substring(4, 6);
+            const d = formattedSaleDate.substring(6, 8);
+            formattedSaleDate = `${m}/${d}/${y}`;
+        }
 
         const financials: DetailedFinancials = {
             purchasePrice: estimatedMarketValue,
@@ -147,7 +159,7 @@ export const MassGISService = {
         };
 
         // Use LOC_ID as the unique identifier to prevent duplicates
-        const locId = (attr as any).LOC_ID || `MGEN-${Date.now()}`;
+        const locId = attr.LOC_ID || `MGEN-${Date.now()}`;
 
         return {
             id: locId,
@@ -157,18 +169,19 @@ export const MassGISService = {
             zip: attr.ZIP || '',
             assetClass: assetClass,
             buildingType: getUseCodeDescription(useCodeStr),
-            sqft: attr.BLD_AREA || attr.RES_AREA || 0,
+            sqft: attr.BLD_AREA || attr.RES_AREA || attr.LIVING_AREA || 0,
             units: units,
             yearBuilt: attr.YEAR_BUILT || 1900,
             zoning: attr.ZONING,
             style: attr.STYLE,
             useCode: attr.USE_CODE,
-            lastSaleDate: (attr as any).LS_DATE || undefined,
-            lastSalePrice: (attr as any).LS_PRICE || undefined,
+            lastSaleDate: formattedSaleDate || undefined,
+            lastSalePrice: attr.LS_PRICE || undefined,
             status: PropertyStatus.DISCOVER,
             history: [],
-            latitude: geom.y,
-            longitude: geom.x,
+            // Use centroid if available (for markers), fallback to geom if it's already a point
+            latitude: centroid?.y || geom?.y || 0,
+            longitude: centroid?.x || geom?.x || 0,
             description: `Official MassGIS Record (${locId}). Owner: ${attr.OWNER1 || 'N/A'}.`,
             financials: financials,
             loan: {
