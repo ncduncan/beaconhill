@@ -36,7 +36,7 @@ export const MassGISService = {
         const params = new URLSearchParams({
             f: 'json',
             where: where,
-            outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,STYLE,ZONING,LOT_SIZE,OWNER1',
+            outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,BLDG_VAL,LAND_VAL,STYLE,ZONING,LOT_SIZE,OWNER1,NUM_ROOMS,STORIES,LS_DATE,LS_PRICE,LOC_ID',
             outSR: '4326', // Return WGS84 coordinates
             returnGeometry: 'true',
             resultRecordCount: '10'
@@ -73,7 +73,7 @@ export const MassGISService = {
         const params = new URLSearchParams({
             f: 'json',
             where: where,
-            outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,STYLE,ZONING,LOT_SIZE,OWNER1',
+            outFields: 'SITE_ADDR,CITY,ZIP,USE_CODE,BLD_AREA,RES_AREA,UNITS,YEAR_BUILT,TOTAL_VAL,BLDG_VAL,LAND_VAL,STYLE,ZONING,LOT_SIZE,OWNER1,NUM_ROOMS,STORIES,LS_DATE,LS_PRICE,LOC_ID',
             outSR: '4326', // Return WGS84 coordinates
             returnGeometry: 'true',
             resultRecordCount: '20'
